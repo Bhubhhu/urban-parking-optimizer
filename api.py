@@ -1,3 +1,4 @@
+from fastapi.responses import FileResponse
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from aco_algorithm import find_best_parking, city_graph
@@ -16,7 +17,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "API is online."}
+    return FileResponse("index.html")
 
 # NEW: Endpoint to get a list of valid starting intersections for the frontend dropdown
 @app.get("/api/v1/intersections")

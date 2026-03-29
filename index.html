@@ -65,7 +65,7 @@
         // 2. Fetch Intersections from FastAPI on load
         async function loadIntersections() {
             try {
-                const response = await fetch('http://127.0.0.1:8000/api/v1/intersections');
+                const response = await fetch('/api/v1/intersections');
                 const data = await response.json();
                 
                 const select = document.getElementById('start-node');
@@ -92,7 +92,7 @@
             
             try {
                 // Call our Python API!
-                const response = await fetch(`http://127.0.0.1:8000/api/v1/get-route?start_node=${startNodeId}`);
+                const response = await fetch(`/api/v1/get-route?start_node=${startNodeId}`);
                 const data = await response.json();
 
                 if (data.status === "success") {
