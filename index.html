@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart City Parking Optimizer</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        #map { height: 100vh; width: 100vw; background-color: #121212; }
+        
+        /* Sleek Floating UI Panel */
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(30, 30, 30, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            color: white;
+            width: 300px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; margin-bottom: 15px; }
+        select { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: none; background: #333; color: white; outline: none; }
+        button { width: 100%; padding: 12px; background-color: #00A3FF; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background-color: #0081CC; }
+        
+        #status { margin-top: 15px; font-size: 0.9rem; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-panel">
+        <h2>Find Optimal Parking</h2>
+        <label for="start-node">Where are you starting?</label>
+        <select id="start-node">
+            <option value="">Loading intersections...</option>
+        </select>
+        <button onclick="findRoute()">Find Route</button>
+        <div id="status">Ready.</div>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        // 1. Initialize the Map (Centered on Chandigarh)
+        const map = L.map('map').setView([30.7333, 76.7794], 14);
+        
+        // Load Dark Mode Map Tiles
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+        }).addTo(map);
+
+        let currentRouteLine = null;
+        let markers = [];
+
+        // 2. Fetch Intersections from FastAPI on load
+        async function loadIntersections() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/api/v1/intersections');
+                const data = await response.json();
+                
+                const select = document.getElementById('start-node');
+                select.innerHTML = ''; // Clear loading text
+                
+                data.intersections.forEach(node => {
+                    let option = document.createElement('option');
+                    option.value = node.id;
+                    option.textContent = node.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                document.getElementById('status').innerText = "Error connecting to server.";
+            }
+        }
+
+        // 3. The Function that runs when the user clicks "Find Route"
+        async function findRoute() {
+            const startNodeId = document.getElementById('start-node').value;
+            const statusText = document.getElementById('status');
+            
+            statusText.innerText = "Running Ant Colony Swarm... 🐜";
+            statusText.style.color = "#FFD700"; // Gold
+            
+            try {
+                // Call our Python API!
+                const response = await fetch(`http://127.0.0.1:8000/api/v1/get-route?start_node=${startNodeId}`);
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    statusText.innerText = `Route Found! Cost: ${data.dynamic_cost}`;
+                    statusText.style.color = "#00FF00"; // Green
+                    drawRoute(data.coordinates);
+                } else {
+                    statusText.innerText = data.message;
+                    statusText.style.color = "#FF3333"; // Red
+                }
+            } catch (error) {
+                statusText.innerText = "Failed to fetch route. Is the server running?";
+                statusText.style.color = "#FF3333";
+            }
+        }
+
+        // 4. Draw the route on the map
+        function drawRoute(coordinates) {
+            // Clear old route and markers if they exist
+            if (currentRouteLine) map.removeLayer(currentRouteLine);
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+
+            // The API returns [lat, lon], which is perfect for Leaflet
+            currentRouteLine = L.polyline(coordinates, {
+                color: '#00A3FF', 
+                weight: 6,
+                opacity: 0.8
+            }).addTo(map);
+
+            // Add Start Pin
+            let startMarker = L.circleMarker(coordinates[0], { color: '#00FF00', radius: 8, fillOpacity: 1 }).addTo(map)
+                .bindPopup("Starting Location").openPopup();
+            markers.push(startMarker);
+
+            // Add End (Parking) Pin
+            let endMarker = L.circleMarker(coordinates[coordinates.length - 1], { color: '#FF00FF', radius: 8, fillOpacity: 1 }).addTo(map)
+                .bindPopup("Optimal Parking Found!");
+            markers.push(endMarker);
+
+            // Automatically zoom map to fit the new route perfectly
+            map.fitBounds(currentRouteLine.getBounds(), { padding: [50, 50] });
+        }
+
+        // Trigger the loading function when the page opens
+        loadIntersections();
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+# Environments
+ml_env/
+venv/
+__pycache__/
+
+# Mac/System files
+.DS_Store
+
+# Ignore the models folder if the .pkl file is too large for GitHub (Optional, but recommended)
+# models/
