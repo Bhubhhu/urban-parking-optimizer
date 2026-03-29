@@ -4,3 +4,4 @@ osmnx
 pandas
 scikit-learn
 networkx
+folium
