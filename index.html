@@ -63,7 +63,6 @@
         }).addTo(map);
 
         let currentRouteLine = null;
-        let walkingLine = null;
         let markers = [];
         let userPin = null;
 
@@ -158,7 +157,6 @@
 
             // Clear old routes and pins
             if (currentRouteLine) map.removeLayer(currentRouteLine);
-            if (walkingLine) map.removeLayer(walkingLine);
             markers.forEach(m => map.removeLayer(m));
             markers = [];
 
@@ -169,18 +167,8 @@
                 opacity: 0.8
             }).addTo(map);
 
-            // Draw a dashed connecting line if the user clicked a custom spot
-            if (data.custom_start) {
-                walkingLine = L.polyline([data.custom_start, coordinates[0]], {
-                    color: '#FFFFFF',
-                    weight: 3,
-                    dashArray: '8, 8', // Creates the dashed walking effect
-                    opacity: 0.6
-                }).addTo(map);
-            }
-
-            // Add Start Pin
-            let startMarker = L.circleMarker(coordinates[0], { color: '#00FF00', radius: 8, fillOpacity: 1 }).addTo(map)
+            // Add Start Pin (Updated to White so it seamlessly covers the user pin)
+            let startMarker = L.circleMarker(coordinates[0], { color: '#FFFFFF', radius: 8, fillOpacity: 1 }).addTo(map)
                 .bindPopup("Start of Driving Route").openPopup();
             markers.push(startMarker);
 
@@ -189,9 +177,8 @@
                 .bindPopup("Optimal Parking Found!");
             markers.push(endMarker);
 
-            // Automatically zoom map to fit the route and the user's pin perfectly
+            // Automatically zoom map to fit the route
             let bounds = currentRouteLine.getBounds();
-            if (userPin) bounds.extend(userPin.getLatLng());
             map.fitBounds(bounds, { padding: [50, 50] });
         }
 

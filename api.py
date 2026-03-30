@@ -62,17 +62,16 @@ def find_nearest_node(lat, lon):
 @app.get("/api/v1/get-route")
 def get_optimal_route(start_node: float = None, lat: float = None, lon: float = None):
     
-    # If the user clicked the map, snap their click to the nearest road!
+    # 1. Snap to the nearest physical road so the AI can run
     if lat is not None and lon is not None:
         start_node = find_nearest_node(lat, lon)
-        print(f"User clicked ({lat}, {lon}). Snapped to nearest intersection: {start_node}")
-    else:
-        print(f"User used dropdown. Start Node: {start_node}")
         
+    # 2. Run the AI from that road
     result = find_best_parking(start_node)
     
-    # Send the raw click back to the frontend so we can draw a custom pin
-    if lat is not None and lon is not None:
-        result['custom_start'] = [lat, lon]
+    # 3. THE FIX: Inject the exact click into the very beginning of the driving route
+    if lat is not None and lon is not None and result.get("status") == "success":
+        # This makes the blue line start exactly where the user clicked
+        result['coordinates'].insert(0, [lat, lon])
         
     return result
