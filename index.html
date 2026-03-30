@@ -29,6 +29,7 @@
         }
 
         h2 { margin-top: 0; font-size: 1.2rem; margin-bottom: 15px; }
+        p.subtitle { font-size: 0.85rem; color: #ccc; margin-top: -10px; margin-bottom: 15px; line-height: 1.4; }
         select { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 8px; border: none; background: #333; color: white; outline: none; }
         button { width: 100%; padding: 12px; background-color: #00A3FF; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; }
         button:hover { background-color: #0081CC; }
@@ -40,6 +41,8 @@
 
     <div id="ui-panel">
         <h2>Find Optimal Parking</h2>
+        <p class="subtitle">Select an intersection below, or <b>click anywhere on the map</b> to drop a pin.</p>
+        
         <label for="start-node">Where are you starting?</label>
         <select id="start-node">
             <option value="">Loading intersections...</option>
@@ -60,7 +63,9 @@
         }).addTo(map);
 
         let currentRouteLine = null;
+        let walkingLine = null;
         let markers = [];
+        let userPin = null;
 
         // 2. Fetch Intersections from FastAPI on load
         async function loadIntersections() {
@@ -82,7 +87,7 @@
             }
         }
 
-        // 3. The Function that runs when the user clicks "Find Route"
+        // 3. Dropdown Menu Routing
         async function findRoute() {
             const startNodeId = document.getElementById('start-node').value;
             const statusText = document.getElementById('status');
@@ -91,14 +96,13 @@
             statusText.style.color = "#FFD700"; // Gold
             
             try {
-                // Call our Python API!
                 const response = await fetch(`/api/v1/get-route?start_node=${startNodeId}`);
                 const data = await response.json();
 
                 if (data.status === "success") {
                     statusText.innerText = `Route Found! Cost: ${data.dynamic_cost}`;
                     statusText.style.color = "#00FF00"; // Green
-                    drawRoute(data.coordinates);
+                    drawRoute(data);
                 } else {
                     statusText.innerText = data.message;
                     statusText.style.color = "#FF3333"; // Red
@@ -109,23 +113,75 @@
             }
         }
 
-        // 4. Draw the route on the map
-        function drawRoute(coordinates) {
-            // Clear old route and markers if they exist
+        // 4. Interactive Map Click Routing
+        map.on('click', async function(e) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+            
+            const statusText = document.getElementById('status');
+            statusText.innerText = "Analyzing map location... 📍";
+            statusText.style.color = "#FFD700"; 
+            
+            // Remove the old custom pin if the user clicks a new spot
+            if (userPin) map.removeLayer(userPin);
+            
+            // Draw a special white pin where the user actually clicked
+            userPin = L.circleMarker([lat, lon], { 
+                color: '#FFFFFF', 
+                radius: 7, 
+                fillOpacity: 1,
+                weight: 2
+            }).addTo(map).bindPopup("Your Location").openPopup();
+                
+            try {
+                // Call the API using the exact latitude and longitude
+                const response = await fetch(`/api/v1/get-route?lat=${lat}&lon=${lon}`);
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    statusText.innerText = `Route Found! Cost: ${data.dynamic_cost}`;
+                    statusText.style.color = "#00FF00"; 
+                    drawRoute(data);
+                } else {
+                    statusText.innerText = data.message;
+                    statusText.style.color = "#FF3333"; 
+                }
+            } catch (error) {
+                statusText.innerText = "Failed to fetch route from click.";
+                statusText.style.color = "#FF3333";
+            }
+        });
+
+        // 5. Draw the route on the map
+        function drawRoute(data) {
+            const coordinates = data.coordinates;
+
+            // Clear old routes and pins
             if (currentRouteLine) map.removeLayer(currentRouteLine);
+            if (walkingLine) map.removeLayer(walkingLine);
             markers.forEach(m => map.removeLayer(m));
             markers = [];
 
-            // The API returns [lat, lon], which is perfect for Leaflet
+            // Draw the main driving route
             currentRouteLine = L.polyline(coordinates, {
                 color: '#00A3FF', 
                 weight: 6,
                 opacity: 0.8
             }).addTo(map);
 
+            // Draw a dashed connecting line if the user clicked a custom spot
+            if (data.custom_start) {
+                walkingLine = L.polyline([data.custom_start, coordinates[0]], {
+                    color: '#FFFFFF',
+                    weight: 3,
+                    dashArray: '8, 8', // Creates the dashed walking effect
+                    opacity: 0.6
+                }).addTo(map);
+            }
+
             // Add Start Pin
             let startMarker = L.circleMarker(coordinates[0], { color: '#00FF00', radius: 8, fillOpacity: 1 }).addTo(map)
-                .bindPopup("Starting Location").openPopup();
+                .bindPopup("Start of Driving Route").openPopup();
             markers.push(startMarker);
 
             // Add End (Parking) Pin
@@ -133,8 +189,10 @@
                 .bindPopup("Optimal Parking Found!");
             markers.push(endMarker);
 
-            // Automatically zoom map to fit the new route perfectly
-            map.fitBounds(currentRouteLine.getBounds(), { padding: [50, 50] });
+            // Automatically zoom map to fit the route and the user's pin perfectly
+            let bounds = currentRouteLine.getBounds();
+            if (userPin) bounds.extend(userPin.getLatLng());
+            map.fitBounds(bounds, { padding: [50, 50] });
         }
 
         // Trigger the loading function when the page opens
